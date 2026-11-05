@@ -1,0 +1,6 @@
+{
+  "name": "my-assistant",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=18" }
+}
