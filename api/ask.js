@@ -5,7 +5,7 @@ const MODEL = process.env.ANTHROPIC_MODEL || "claude-haiku-5-5";
 export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ error: "POST only" });
   const key = process.env.ANTHROPIC_API_KEY;
-  if (!key) return res.status(500).json({ error: "ANTHROPIC_API_KEY is not set in Vercel" });
+  if (!key) return res.status(500).json({ error: "ANTHROPIC_API_KEY is not set in Vercel", code: "no_key" });
 
   const { input, images = [] } = req.body || {};
   if (!input) return res.status(400).json({ error: "input is required" });
@@ -32,7 +32,12 @@ export default async function handler(req, res) {
       body: JSON.stringify({ model: MODEL, max_tokens: 2048, messages }),
     });
     const data = await r.json();
-    if (!r.ok) return res.status(r.status === 429 ? 429 : 502).json({ error: data?.error?.message || "AI error" });
+    if (!r.ok) {
+      const msg = data?.error?.message || "AI error";
+      if (/credit balance/i.test(msg)) return res.status(402).json({ error: msg, code: "no_credit" });
+      if (r.status === 401) return res.status(401).json({ error: msg, code: "bad_key" });
+      return res.status(r.status === 429 ? 429 : 502).json({ error: msg, code: "upstream" });
+    }
     const text = (data.content || []).filter(b => b.type === "text").map(b => b.text).join("");
     return res.status(200).json({ text, truncated: data.stop_reason === "max_tokens" });
   } catch (e) {

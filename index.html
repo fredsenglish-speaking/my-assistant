@@ -472,7 +472,7 @@ async function apiSample(input, opts={}){
   try{ r = await fetch('/api/ask',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({input,images}),signal:opts.signal}); }
   catch(e){ throw {code: e && e.name==='AbortError' ? 'cancelled' : 'upstream_error', message:String(e)}; }
   let data={}; try{ data=await r.json(); }catch(e){}
-  if(!r.ok) throw {code: r.status===429?'rate_limited': r.status===413?'prompt_too_large':'upstream_error', message:data.error||String(r.status)};
+  if(!r.ok) throw {code: data.code==='no_credit'?'no_credit': data.code==='bad_key'?'bad_key': data.code==='no_key'?'no_key': r.status===429?'rate_limited': r.status===413?'prompt_too_large':'upstream_error', message:data.error||String(r.status)};
   const text=String(data.text||''); if(!text.trim()) throw {code:'empty_completion',message:'empty'};
   if(opts.onText) try{ opts.onText({text, delta:text}); }catch(e){}
   return {text, truncated: !!data.truncated, modelTierApplied:'default'};
@@ -589,7 +589,10 @@ const ERR = {
   session_expired:'Sessiyanın vaxtı bitib. Yenidən daxil olun.',
   refused:'Bu suala cavab verilə bilmədi. Sualı başqa cür yazın.',
   prompt_too_large:'Mesaj çox uzundur. Daha qısa yazın və ya "Təmizlə" düyməsini basın.',
-  empty_completion:'Cavab alınmadı. Sualı sadələşdirib yenidən göndərin.'
+  empty_completion:'Cavab alınmadı. Sualı sadələşdirib yenidən göndərin.',
+  no_credit:'AI hələ aktiv deyil: API hesabında kredit yoxdur. Sayt sahibi platform.claude.com-da kredit əlavə etməlidir.',
+  no_key:'AI hələ qoşulmayıb: Vercel-də ANTHROPIC_API_KEY əlavə edilməyib.',
+  bad_key:'AI açarı yanlışdır. Sayt sahibi Vercel-də ANTHROPIC_API_KEY-i yoxlamalıdır.'
 };
 
 async function ask(id, text){
@@ -616,7 +619,7 @@ async function ask(id, text){
     else if(bubble) bubble.remove();
     if(e && e.code !== 'cancelled'){
       if(['not_granted','sampling_disabled','not_declared','capability_disabled'].includes(e.code)) disabled = true;
-      if(current===id) addBubble('err', ERR[e.code] || 'Əlaqə xətası baş verdi. Yenidən cəhd edin.');
+      if(current===id) addBubble('err', ERR[e.code] || ('Əlaqə xətası baş verdi. Yenidən cəhd edin.'+(e.message?' ('+String(e.message).slice(0,140)+')':'')));
     }
   }finally{ busy=null; setBusy(false); }
 }
@@ -825,7 +828,7 @@ Zülal, yağ, karbohidrat qramla. Şəkildə yemək və ya içki yoxdursa {"yeme
       code==='images_unavailable'?'Şəkil təhlili bu baxışda əlçatan deyil.':
       code==='image_rejected'?'Bu şəkil qəbul olunmadı. JPEG və ya PNG formatında başqa şəkil seçin.':
       code==='invalid_json'?'Nəticə oxunmadı. Yenidən "Kalorini hesabla" düyməsinə toxunun.':
-      ERR[code]||'Əlaqə xətası baş verdi. Yenidən cəhd edin.'}</p>`;
+      ERR[code]||('Əlaqə xətası baş verdi. Yenidən cəhd edin.'+(e&&e.message?' ('+esc(String(e.message)).slice(0,140)+')':''))}</p>`;
   }finally{ kcalCtl=null; const b=$('kGo'); if(b) b.textContent='Kalorini hesabla'; }
 }
 
